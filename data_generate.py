@@ -1,6 +1,7 @@
 import gzip
 import numpy as np
 import scipy as sp
+import scipy.stats as stats
 
 def extract_data(filename, num_images):
     IMAGE_SIZE = 28
@@ -22,14 +23,17 @@ def extract_labels(filename, num_images):
         labels = np.frombuffer(buf, dtype=np.uint8).astype(np.int64)
     return labels
 
-class generate_images(object):
+class mnist_documents(object):
 
     # Create an object to generate document-like images with mnist digits.
-    def __init__(self, scaling_factor, empty_percent, **kwargs):
+    def __init__(self, num_row, num_images_row, scaling_factor, empty_percent, **kwargs):
         # Arguments:
         #   scaling_factor: 0<=float<=1, the digits will be scaled according to a normal distribution
         #   empty_percent: 0<=float<=1, the percentage of empty spots in each generated image
         assert 0 <= scaling_factor and scaling_factor <= 1, 'Enter a float between 0 and 1 inclusive'
+
+        self.num_row = num_row
+        self.num_images = num_images_row
 
         self.scaling_factor = scaling_factor
         self.scaling_range = kwargs.get('scaling_range', 0.3)
@@ -81,84 +85,97 @@ class generate_images(object):
     def _add_empty_images(self):
         # extract and append an empty image
 
-        temp_iamge = extract_data(r'data/train-images-idx3-ubyte.gz', 10000)
-        temp_labels = extract_labels(r'data/train-labels-idx1-ubyte.gz', 10000)
+        temp_iamge = extract_data(r'data\train-images-idx3-ubyte.gz', 10000)
+        temp_labels = extract_labels(r'data\train-labels-idx1-ubyte.gz', 10000)
 
         image = np.concatenate([np.zeros((1, self._image_size, self._image_size)), temp_iamge])
         labels = np.append(np.nan, temp_labels)
 
         return image, labels
 
-    def image_gluing(self, num_images):
+    def generate(self):
         # Generate an image of a fixed size composed of randomly selected digits
         # return the image as well as the coordinates of each digits
         # Arguments:
         #    num_images: int, the number of digits to be included in the output image.
-
+        num_row = self.num_row
+        num_col = self.num_images
         image_size = self._image_size
         scaling_factor = self.scaling_factor
         scaling_range = self.scaling_range
 
-        random_index = np.random.choice(range(0,self.num_sample), num_images,
-                                        p=[self.empty_percent]+[(1-self.empty_percent)/(self.num_sample-1)]*(self.num_sample-1))
-
-        glued_images = np.zeros((image_size, image_size * num_images))
+        glued_images = np.zeros((num_row * image_size, num_col * image_size))
         # glued_labels = np.zeros((num_images, 10))
-        glued_data = np.zeros((num_images, 15))
+        glued_data = np.zeros((num_row, num_col, 15))
         # bounding_boxes = np.zeros((num_images, 4))
 
+
         if scaling_factor != 1:
-            # generate random scaling factors from N(scaling_factor, 0.3)
-            scalings = scaling_range * sp.stats.truncnorm(self._clip_a,self._clip_b).rvs(num_images) + scaling_factor
-            for i, index in enumerate(random_index):
-                image = self.images[index]
-                label = self.labels[index] if index != 0 else None
+            for j in range(num_row):
 
-                if label is not None:
-                    #resize and pad the image
-                    padded_image = generate_images.resize_pad_image(image, scalings[i])
+                # generate random scaling factors from N(scaling_factor, 0.3)
+                random_index = np.random.choice(range(0, self.num_sample), num_col,
+                                                p=[self.empty_percent] + [(1 - self.empty_percent) / (self.num_sample - 1)] * (
+                                                self.num_sample - 1))
 
-                    # now find the bounding box for the digit
-                    bounding_box = generate_images.bounding_box_location(padded_image, mode='width')
 
-                    #fit the image in and the bounding boxes
-                    glued_images[:, image_size * i: image_size * (i+1)] = padded_image
-                    glued_data[i, 0] = 1
-                    glued_data[i, 1:5] = bounding_box
-                    glued_data[i, int(label) + 5] = 1
+                scalings = scaling_range * stats.truncnorm(self._clip_a,self._clip_b).rvs(num_col) + scaling_factor
 
-                else:
-                    glued_images[:, image_size * i: image_size * (i+1)] = image
+                for i, index in enumerate(random_index):
+
+                    image = self.images[index]
+                    label = self.labels[index] if index != 0 else None
+
+                    if label is not None:
+                        #resize and pad the image
+                        padded_image = mnist_documents.resize_pad_image(image, scalings[i])
+
+                        # now find the bounding box for the digit
+                        bounding_box = mnist_documents.bounding_box_location(padded_image, mode='width')
+
+                        #fit the image in and the bounding boxes
+                        glued_images[image_size * j: image_size * (j + 1),
+                                     image_size * i: image_size * (i + 1)] = padded_image
+                        glued_data[j, i, 0] = 1
+                        glued_data[j ,i, 1:5] = bounding_box
+                        glued_data[j ,i, int(label) + 5] = 1
+
+                    else:
+                        glued_images[image_size * j: image_size * (j + 1),
+                                     image_size * i: image_size * (i + 1)] = image
 
         else:
-            for i, index in enumerate(random_index):
-                image = self.images[index]
-                label = self.labels[index] if index != 0 else None
+            for j in range(num_row):
+                for i, index in enumerate(random_index):
+                    image = self.images[index]
+                    label = self.labels[index] if index != 0 else None
 
-                glued_images[:, image_size * i] = image
-                if label is not None:
-                    bounding_box = generate_images.bounding_box_location(image, mode='width')
+                    glued_images[image_size * j: image_size * (j + 1),
+                                 image_size * i: image_size * (i + 1)] = image
 
-                    glued_data[i, 0] = 1
-                    glued_data[i, 1:5] = bounding_box
-                    glued_data[i, int(label) + 5] = 1
+                    if label is not None:
+                        bounding_box = generate_images.bounding_box_location(image, mode='width')
 
-                    bounding_boxes[i,:] = bounding_box
+                        glued_data[j ,i, 0] = 1
+                        glued_data[j, i, 1:5] = bounding_box
+                        glued_data[j, i, int(label) + 5] = 1
 
-        return glued_images, np.expand_dims(glued_data, axis=0)
+                        # bounding_boxes[i,:] = bounding_box
 
-def document_like_digits(num_rows, num_image_per_row, scaling_factor, empty_percent):
-    # Generate word like documents consisting mnist digits
+        return glued_images, glued_data
 
-    gi = generate_images(scaling_factor, empty_percent)
-
-    images = np.zeros((gi.image_size * num_rows, gi.image_size * num_image_per_row))
-    data_array = np.zeros((num_rows, num_image_per_row, 15))
-
-    for i in range(num_rows):
-        image, data = gi.image_gluing(num_image_per_row)
-
-        images[i*gi.image_size:(i+1)*gi.image_size] = image
-        data_array[i, :, :] = data
-
-    return images, data_array
+# def document_like_digits(num_rows, num_image_per_row, scaling_factor, empty_percent):
+#     # Generate word like documents consisting mnist digits
+#
+#     gi = generate_images(scaling_factor, empty_percent)
+#
+#     images = np.zeros((gi.image_size * num_rows, gi.image_size * num_image_per_row))
+#     data_array = np.zeros((num_rows, num_image_per_row, 15))
+#
+#     for i in range(num_rows):
+#         image, data = gi.image_gluing(num_image_per_row)
+#
+#         images[i*gi.image_size:(i+1)*gi.image_size] = image
+#         data_array[i, :, :] = data
+#
+#     return images, data_array
