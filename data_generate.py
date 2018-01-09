@@ -37,9 +37,10 @@ class mnist_documents(object):
 
         self.scaling_factor = scaling_factor
         self.scaling_range = kwargs.get('scaling_range', 0.3)
+
         self.empty_percent = empty_percent
-        self._clip_a = -self.scaling_factor/self.scaling_range
-        self._clip_b = (1-self.scaling_factor)/self.scaling_range
+        self._clip_a = (0.1 - self.scaling_factor)/self.scaling_range
+        self._clip_b = (1 - self.scaling_factor)/self.scaling_range
         self._image_size = 28
         self.images, self.labels = self._add_empty_images()
 
@@ -77,10 +78,14 @@ class mnist_documents(object):
         y1 = y.max()
         y2 = y.min()
 
-        if mode == 'width':
-            return np.array([x1, y1, x2 - x1, y1 - y2])
-        else:
-            return np.array([[x1, y1], [x2, y2]])
+        height = y1 - y2
+        width = x2 - x1
+
+        x_center = int(width / 2)
+        y_center = int(height / 2)
+
+        return np.array([x_center, y_center,
+                         height/digit_image.shape[0], width/digit_image.shape[0]])
 
     def _add_empty_images(self):
         # extract and append an empty image

@@ -41,4 +41,16 @@ class yolo(Model):
         return x
 
 
-def yolo_loss(y_pred, y_true):
+def yolo_loss(y_true):
+
+    # y_true will be of the shape (S, S ,15)
+    # we are unwrapping it to form a vector of length S^2 * 15
+
+    obj_presence = y_true[:, :, 0].flatten()
+    obj_coord = y_true[:, :, 1:3].flatten()
+    obj_hw = y_true[:,:, 3:5].flatten()
+    obj_class = y_true[:,:, 5:].flatten()
+
+    # Define the masks in the yolo loss function
+
+
