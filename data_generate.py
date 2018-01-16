@@ -1,7 +1,8 @@
 import gzip
 import numpy as np
-import scipy as sp
 import scipy.stats as stats
+import utils
+from skimage.transform import resize
 
 def extract_data(filename, num_images):
     IMAGE_SIZE = 28
@@ -39,7 +40,7 @@ class mnist_documents(object):
         self.scaling_range = kwargs.get('scaling_range', 0.3)
 
         self.empty_percent = empty_percent
-        self._clip_a = (0.1 - self.scaling_factor)/self.scaling_range
+        self._clip_a = (0.4 - self.scaling_factor)/self.scaling_range
         self._clip_b = (1 - self.scaling_factor)/self.scaling_range
         self._image_size = 28
         self.images, self.labels = self._add_empty_images()
@@ -53,7 +54,8 @@ class mnist_documents(object):
     @staticmethod
     def resize_pad_image(image, scale):
         # resize and scale the image
-        scaled_image = sp.misc.imresize(image, scale)
+        output_shape = [int(image.shape[0]*scale)]*2
+        scaled_image = resize(image, output_shape)
 
         # calculate the dimensional differences between scaled and original image
         # and pad the image to retain 28*28 size
@@ -110,9 +112,9 @@ class mnist_documents(object):
         scaling_range = self.scaling_range
 
         glued_images = np.zeros((num_row * image_size, num_col * image_size))
-        # glued_labels = np.zeros((num_images, 10))
+
         glued_data = np.zeros((num_row, num_col, 15))
-        # bounding_boxes = np.zeros((num_images, 4))
+
 
 
         if scaling_factor != 1:
@@ -169,18 +171,18 @@ class mnist_documents(object):
 
         return glued_images, glued_data
 
-# def document_like_digits(num_rows, num_image_per_row, scaling_factor, empty_percent):
-#     # Generate word like documents consisting mnist digits
-#
-#     gi = generate_images(scaling_factor, empty_percent)
-#
-#     images = np.zeros((gi.image_size * num_rows, gi.image_size * num_image_per_row))
-#     data_array = np.zeros((num_rows, num_image_per_row, 15))
-#
-#     for i in range(num_rows):
-#         image, data = gi.image_gluing(num_image_per_row)
-#
-#         images[i*gi.image_size:(i+1)*gi.image_size] = image
-#         data_array[i, :, :] = data
-#
-#     return images, data_array
+
+def generate_documents(nb_documents, nb_rows, scale=0.9, empty_percent=0.5):
+    images = np.zeros((nb_documents, nb_rows * 28, nb_rows * 28, 1))
+    labels = np.zeros((nb_documents, nb_rows**2 * 15))
+
+    mnist_class = mnist_documents(nb_rows, nb_rows, scale, empty_percent)
+
+    for i in range(nb_documents):
+        if i%100==0:
+            print(i)
+        image, label = mnist_class.generate()
+        images[i, :, :, 0] = image
+        labels[i, :] = utils.unwrap_data(label)
+
+    return images, labels
